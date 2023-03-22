@@ -13,20 +13,20 @@
  
 using namespace std;
 
-// Define the structure of a decision tree node
+vector<vector<string>> train_dataset, test_dataset;
 struct Node {
     string label;
     map<string, Node*> children;
 };
-std::vector<std::vector<std::string>> read_csv(std::string filename) {
-    std::vector<std::vector<std::string>> data;
-    std::ifstream file(filename);
-    std::string line;
+vector<vector<string>> read_csv(string filename) {
+    vector<vector<string>> data;
+    ifstream file(filename);
+    string line;
 
     while (getline(file, line)) {
-        std::vector<std::string> row;
-        std::stringstream ss(line);
-        std::string cell;
+        vector<string> row;
+        stringstream ss(line);
+        string cell;
 
         while (getline(ss, cell, ',')) {
             row.push_back(cell);
@@ -38,7 +38,6 @@ std::vector<std::vector<std::string>> read_csv(std::string filename) {
     return data;
 }
 
-// Calculate the entropy of a dataset based on the class values
 double entropy(const vector<string>& classes) {
     map<string, int> freq;
     for (const auto& c : classes) {
@@ -52,7 +51,6 @@ double entropy(const vector<string>& classes) {
     return ent;
 }
 
-// Calculate the information gain of a dataset based on a given attribute
 double information_gain(const vector<vector<string>>& data, int attr_idx) {
     vector<string> classes(data.size());
     for (int i = 0; i < data.size(); ++i) {
@@ -66,26 +64,26 @@ double information_gain(const vector<vector<string>>& data, int attr_idx) {
     double child_entropy = 0.0;
     for (const auto& [_, subset] : splits) {
         double p = static_cast<double>(subset.size()) / data.size();
+        vector<string> q;
         for (const auto& r : subset) {
-        child_entropy += p * entropy({r.back()});
-}
+            q.push_back(r.back());
+        }
+        child_entropy += p * entropy(q);
+        
     }
     return parent_entropy - child_entropy;
 }
 
-// Build a decision tree recursively using ID3
-Node* build_tree(const vector<vector<string>>& data, const vector<int>& attr_indices) {
+Node* build_tree(const vector<vector<string>>& data,  const vector<int> &attr_indices) {
     Node* root = new Node();
     vector<string> classes(data.size());
     for (int i = 0; i < data.size(); ++i) {
         classes[i] = data[i].back();
     }
-    // If all examples have the same class, return a leaf node with that class
     if (entropy(classes) == 0.0) {
         root->label = classes.front();
         return root;
     }
-    // If there are no attributes left to split on, return a leaf node with the majority class
     if (attr_indices.empty()) {
         map<string, int> freq;
         for (const auto& c : classes) {
@@ -96,7 +94,6 @@ Node* build_tree(const vector<vector<string>>& data, const vector<int>& attr_ind
         })->first;
         return root;
     }
-    // Otherwise, select the attribute with the highest information gain and split on it
     int best_attr_idx = attr_indices.front();
     double best_gain = -1.0;
     for (const auto& i : attr_indices) {
@@ -119,12 +116,11 @@ Node* build_tree(const vector<vector<string>>& data, const vector<int>& attr_ind
     }
     for (const auto& [attr_val, subset] : splits) {
         Node* child = build_tree(subset, remaining_attr_indices);
-root->children[attr_val] = child;
-}
+        root->children[attr_val] = child;
+        }
 return root;
 }
 
-// Classify a single record using a decision tree
 string classify(const vector<string>& record, Node* root) {
 if (root->children.empty()) {
 return root->label;
@@ -133,10 +129,10 @@ string attr_val = record[stoi(root->label)];
 if (root->children.find(attr_val) == root->children.end()) {
 return root->label;
 }
+
 return classify(record, root->children[attr_val]);
 }
 
-// Generate a random subset of the dataset for bagging
 vector<vector<string>> bagging(const vector<vector<string>>& data, int num_samples) {
 vector<vector<string>> subset(num_samples);
 random_device rd;
@@ -148,8 +144,7 @@ record = data[dis(gen)];
 return subset;
 }
 
-// Build a random forest using bagging and ID3
-vector<Node*> build_forest(const vector<vector<string>>& data, int num_trees, int max_depth, int num_features) {
+vector<Node*> build_forest(const vector<vector<string>>& data, int num_trees, int num_features) {
 vector<Node*> forest(num_trees);
 vector<int> attr_indices(data.front().size() - 1);
 iota(attr_indices.begin(), attr_indices.end(), 0);
@@ -162,7 +157,6 @@ forest[i] = build_tree(subset, attr_indices);
 return forest;
 }
 
-// Classify a record using a random forest
 string classify_forest(const vector<string>& record, const vector<Node*>& forest) {
 map<string, int> freq;
 for (const auto& tree : forest) {
@@ -174,19 +168,20 @@ return p1.second < p2.second;
 })->first;
 }
 
-// Test the accuracy of a classifier on a dataset
-double test_classifier(const vector<vector<string>>& data, const vector<Node*>& forest) {
+vector<double> test_classifier(const vector<vector<string>>& data, const vector<Node*>& forest,int num_train) {
 int num_correct = 0;
-for (const auto& record : data) {
+int count =0;
+for(const auto& record : data) {
 string prediction = classify_forest(record, forest);
-//cout<<prediction<<record.back()<<endl;
-if (prediction == record.back()) {
-    
+ 
+cout<<test_dataset[count][2].substr(1,test_dataset[count][2].size()-2)<<"--->";
+if (prediction == record.back()) {  
     num_correct++;
 }
-
+cout<<"Predicted"<<"="<<prediction<<"   "<<"Survived"<<"="<<record.back()<<"\n";
+count++;
 }
-return static_cast<double>(num_correct) / data.size();
+return {(double)num_correct,(double)data.size()};
 }
 void free_tree(Node* root) {
     for (auto& child : root->children) {
@@ -196,42 +191,34 @@ void free_tree(Node* root) {
 }
 
  int main() {
-// // Load the dataset
-// /*vector<vector<string>> data = {{"Sunny", "Hot", "High", "Weak", "No"},
-// {"Sunny", "Hot", "High", "Strong", "No"},
-// {"Overcast", "Hot", "High", "Weak", "Yes"},
-// {"Rain", "Mild", "High", "Weak", "Yes"},
-// {"Rain", "Cool", "Normal", "Weak", "Yes"},
-// {"Rain", "Cool", "Normal", "Strong", "No"},
-// {"Overcast", "Cool", "Normal", "Strong", "Yes"},
-// {"Sunny", "Mild", "High", "Weak", "No"},
-// {"Sunny", "Cool", "Normal", "Weak", "Yes"},
-// {"Rain", "Mild", "Normal", "Weak", "Yes"},
-// {"Sunny", "Mild", "Normal", "Strong", "Yes"},
-// {"Overcast", "Mild", "High", "Strong", "Yes"},
-// {"Overcast","Mild", "Normal", "Weak", "Yes"},
-// {"Rain", "Mild", "High", "Strong", "No"},
-// {"Overcast", "Mild", "High", "Weak", "Yes"}};
-// */
- vector<vector<string>> data=read_csv("titanic.csv");
-     //for(int i=0;i<data[0].size();i++)cout<<data[0][i]<<" ";
-//Split the dataset into training and test sets
+ios_base::sync_with_stdio(false);
+cout.tie(NULL);
+freopen("output.txt","w",stdout);
+
+ 
+vector<vector<string>> data=read_csv("titanic.csv");
 vector<vector<string>> train_set, test_set;
+
+ 
 random_device rd;
 mt19937 gen(rd());
-shuffle(data.begin(), data.end(), gen);
 int num_train = data.size() * 0.7;
 train_set.assign(data.begin(), data.begin() + num_train);
 test_set.assign(data.begin() + num_train, data.end());
 
-// Train a random forest
-vector<Node*> forest = build_forest(train_set, 4, 3, 2);
 
-// Test the accuracy of the random forest
-double accuracy = test_classifier(test_set, forest);
-cout << "Accuracy: " << accuracy << endl;
 
-// Free the memory allocated for the decision trees
+auto dataset=read_csv("train.csv");
+num_train = dataset.size() * 0.7;
+train_dataset.assign(dataset.begin(), dataset.begin() + num_train);
+test_dataset.assign(dataset.begin() + num_train, dataset.end());
+
+ 
+
+vector<Node*> forest = build_forest(train_set, 3,3);
+auto metrics = test_classifier(test_set, forest,num_train);
+cout<<"Train Size--->"<<train_set.size()<<"\n"<<"Test Size--->"<<test_set.size()<<"\n";
+cout <<"Correct Predictions---->"<<metrics.front()<<"\n"<<"Data Size---->"<<metrics.back()<<"\n"<<"Accuracy--->"<<(metrics.front()/metrics.back());  
 for (const auto& tree : forest) {
     free_tree(tree);
 }
